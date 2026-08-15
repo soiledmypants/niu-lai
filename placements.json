@@ -29,7 +29,22 @@
         "width": 47,
         "fliph": true
       }
-    ]
+    ],
+    "overrides": {
+      "brown skin": [
+        {
+          "left": 990,
+          "top": 448,
+          "width": 43
+        },
+        {
+          "left": 232,
+          "top": 439,
+          "width": 47,
+          "fliph": true
+        }
+      ]
+    }
   },
   "04-hat/bull/black cap.png": {
     "src": "sources/black cap.png",
@@ -59,7 +74,16 @@
         "top": 667,
         "width": 228
       }
-    ]
+    ],
+    "overrides": {
+      "navy skin": [
+        {
+          "left": 706,
+          "top": 681,
+          "width": 228
+        }
+      ]
+    }
   },
   "05-cig/cow/cig.png": {
     "src": "sources/cig.png",
@@ -69,7 +93,58 @@
         "top": 896,
         "width": 228
       }
-    ]
+    ],
+    "overrides": {
+      "base": [
+        {
+          "left": 699,
+          "top": 853,
+          "width": 228
+        }
+      ],
+      "black skin": [
+        {
+          "left": 691,
+          "top": 847,
+          "width": 228
+        }
+      ],
+      "blue skin": [
+        {
+          "left": 691,
+          "top": 856,
+          "width": 228
+        }
+      ],
+      "gray skin": [
+        {
+          "left": 702,
+          "top": 870,
+          "width": 228
+        }
+      ],
+      "green skin": [
+        {
+          "left": 702,
+          "top": 862,
+          "width": 228
+        }
+      ],
+      "purple skin": [
+        {
+          "left": 711,
+          "top": 853,
+          "width": 228
+        }
+      ],
+      "red skin": [
+        {
+          "left": 705,
+          "top": 856,
+          "width": 228
+        }
+      ]
+    }
   },
   "05-cig/bull/joint.png": {
     "src": "sources/joint.png",
@@ -79,7 +154,16 @@
         "top": 667,
         "width": 228
       }
-    ]
+    ],
+    "overrides": {
+      "navy skin": [
+        {
+          "left": 706,
+          "top": 681,
+          "width": 228
+        }
+      ]
+    }
   },
   "05-cig/cow/joint.png": {
     "src": "sources/joint.png",
@@ -89,6 +173,57 @@
         "top": 896,
         "width": 228
       }
-    ]
+    ],
+    "overrides": {
+      "base": [
+        {
+          "left": 699,
+          "top": 853,
+          "width": 228
+        }
+      ],
+      "black skin": [
+        {
+          "left": 691,
+          "top": 847,
+          "width": 228
+        }
+      ],
+      "blue skin": [
+        {
+          "left": 691,
+          "top": 856,
+          "width": 228
+        }
+      ],
+      "gray skin": [
+        {
+          "left": 702,
+          "top": 870,
+          "width": 228
+        }
+      ],
+      "green skin": [
+        {
+          "left": 702,
+          "top": 862,
+          "width": 228
+        }
+      ],
+      "purple skin": [
+        {
+          "left": 711,
+          "top": 853,
+          "width": 228
+        }
+      ],
+      "red skin": [
+        {
+          "left": 705,
+          "top": 856,
+          "width": 228
+        }
+      ]
+    }
   }
 }

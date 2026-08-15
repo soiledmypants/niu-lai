@@ -1,7 +1,7 @@
-# BNB NFT — Trait Studio
+# NIU LAI — Trait Studio
 
-Layer-matching studio + collection generator for a **1,111**-piece NFT collection on BNB Chain.
-You make the art here, generate the 1,111 finals, and send the `output/` folder to your friend for minting.
+Layer-matching studio + collection generator for **NIU LAI**, a **4,444**-piece bull & cow NFT collection on BNB Chain.
+You make the art here, generate the 4,444 finals, and send the `output/` folder to your friend for minting.
 
 ## Run it
 
@@ -11,17 +11,9 @@ npm run samples   # optional: placeholder art so you can play with the studio
 npm start         # http://localhost:5311
 ```
 
-## The math for 1,111 NFTs
+## The math
 
-Unique combos = product of trait counts per layer. You need ≥ 1,111.
-
-| backgrounds | bodies | colors | combos |
-|---|---|---|---|
-| **10** | **12** | **10** | **1,200** ← recommended (89 spare) |
-| 11 | 11 | 10 | 1,210 |
-| 10 | 10 | 11 | 1,100 — NOT enough |
-
-32 images is the minimum total. The studio header shows live combo math as you drop files in.
+Current layers: `17 backgrounds × (13 bull + 13 cow skins) × 2 earring × 2 hat × 3 smoke (none/cig/joint) = 5,304 unique combos` — enough for the 4,444 supply with 860 spare. The studio header shows live combo math as you drop files in. Bull/cow never mix on one NFT; accessory positions are stored per species (and optionally per skin) in `placements.json` + `variants/`.
 
 ## How layers work
 
