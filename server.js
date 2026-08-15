@@ -35,6 +35,19 @@ function variantPath(key, skin) {
   return path.join(VARIANTS_DIR, key.replace(/\.png$/i, '') + '@' + skin + '.png');
 }
 
+// traits that share one position: adjusting either re-renders both (user tunes once)
+const LINKED = [
+  ['05-cig/bull/cig.png', '05-cig/bull/joint.png'],
+  ['05-cig/cow/cig.png', '05-cig/cow/joint.png'],
+];
+function linkedPartner(key) {
+  for (const [a, b] of LINKED) {
+    if (key === a) return b;
+    if (key === b) return a;
+  }
+  return null;
+}
+
 const SKIN_RE = /^[\w][\w \-]*$/;
 
 app.post('/api/place', async (req, res) => {
@@ -47,12 +60,17 @@ app.post('/api/place', async (req, res) => {
   const all = readPlacements();
 
   // remove a skin override → that skin falls back to the default position
-  if (skin && remove) {
-    if (all[key] && all[key].overrides) {
-      delete all[key].overrides[skin];
-      if (!Object.keys(all[key].overrides).length) delete all[key].overrides;
+  function removeOverride(k) {
+    if (all[k] && all[k].overrides) {
+      delete all[k].overrides[skin];
+      if (!Object.keys(all[k].overrides).length) delete all[k].overrides;
     }
-    try { fs.rmSync(variantPath(key, skin), { force: true }); } catch {}
+    try { fs.rmSync(variantPath(k, skin), { force: true }); } catch {}
+  }
+  if (skin && remove) {
+    removeOverride(key);
+    const partner = linkedPartner(key);
+    if (partner) removeOverride(partner);
     fs.writeFileSync(PLACEMENTS_PATH, JSON.stringify(all, null, 2));
     return res.json({ ok: true });
   }
@@ -64,21 +82,29 @@ app.post('/api/place', async (req, res) => {
   if (!srcPath.startsWith(SOURCES_DIR)) return res.status(400).json({ error: 'bad source path' });
   if (!fs.existsSync(srcPath)) return res.status(400).json({ error: 'source not found: ' + src });
 
-  try {
+  // writes one trait's placement (its own source, the shared parts)
+  async function apply(k, kSrc) {
+    const kSrcPath = path.join(ROOT, kSrc);
+    if (!kSrcPath.startsWith(SOURCES_DIR) || !fs.existsSync(kSrcPath)) return;
     if (skin) {
-      // position for ONE body skin only
-      const vp = variantPath(key, skin);
+      const vp = variantPath(k, skin);
       fs.mkdirSync(path.dirname(vp), { recursive: true });
-      await renderPlacement(srcPath, parts, vp);
-      all[key] = all[key] || { src, parts };
-      all[key].overrides = all[key].overrides || {};
-      all[key].overrides[skin] = parts;
+      await renderPlacement(kSrcPath, parts, vp);
+      all[k] = all[k] || { src: kSrc, parts };
+      all[k].overrides = all[k].overrides || {};
+      all[k].overrides[skin] = parts;
     } else {
-      // default position for every skin of this species (keeps existing skin overrides)
-      fs.mkdirSync(path.dirname(dest), { recursive: true });
-      await renderPlacement(srcPath, parts, dest);
-      all[key] = { src, parts, ...(all[key] && all[key].overrides ? { overrides: all[key].overrides } : {}) };
+      const d = path.join(LAYERS_DIR, k);
+      fs.mkdirSync(path.dirname(d), { recursive: true });
+      await renderPlacement(kSrcPath, parts, d);
+      all[k] = { src: kSrc, parts, ...(all[k] && all[k].overrides ? { overrides: all[k].overrides } : {}) };
     }
+  }
+
+  try {
+    await apply(key, src);
+    const partner = linkedPartner(key);
+    if (partner && all[partner]) await apply(partner, all[partner].src);
     fs.writeFileSync(PLACEMENTS_PATH, JSON.stringify(all, null, 2));
     res.json({ ok: true });
   } catch (e) {

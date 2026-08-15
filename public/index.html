@@ -617,7 +617,9 @@ function renderAdjBar() {
   const t = layers[adj.li].traits[sel[adj.li]];
   bar.innerHTML = '<div class="adj-title">ADJUSTING: ' + layers[adj.li].label + ' / ' + t.name +
     (t.group ? ' (' + t.group + ')' : '') + '</div>' +
-    '<div class="adj-help">sliders or drag on image &middot; scroll on image = resize &middot; arrows nudge &middot; esc cancel</div>';
+    '<div class="adj-help">sliders or drag on image &middot; scroll on image = resize &middot; arrows nudge &middot; esc cancel' +
+    (adj.key.startsWith('05-cig/') ? ' &middot; <span style="color:var(--lime)">cig &amp; joint share this position</span>' : '') +
+    '</div>';
 
   if (adj.parts.length > 1) {
     const tabs = document.createElement('div');

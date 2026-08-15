@@ -66,7 +66,27 @@
     "parts": [
       {
         "left": 702,
-        "top": 897,
+        "top": 896,
+        "width": 228
+      }
+    ]
+  },
+  "05-cig/bull/joint.png": {
+    "src": "sources/joint.png",
+    "parts": [
+      {
+        "left": 706,
+        "top": 667,
+        "width": 228
+      }
+    ]
+  },
+  "05-cig/cow/joint.png": {
+    "src": "sources/joint.png",
+    "parts": [
+      {
+        "left": 702,
+        "top": 896,
         "width": 228
       }
     ]
