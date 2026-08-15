@@ -1,0 +1,96 @@
+{
+  "03-cig/bull/cig.png": {
+    "src": "sources/cig.png",
+    "parts": [
+      {
+        "left": 620,
+        "top": 645,
+        "width": 300
+      }
+    ]
+  },
+  "03-cig/cow/cig.png": {
+    "src": "sources/cig.png",
+    "parts": [
+      {
+        "left": 745,
+        "top": 800,
+        "width": 300
+      }
+    ]
+  },
+  "04-earring/bull/bnb.png": {
+    "src": "sources/bnb earring.png",
+    "parts": [
+      {
+        "left": 878,
+        "top": 420,
+        "width": 95
+      },
+      {
+        "left": 279,
+        "top": 420,
+        "width": 95,
+        "fliph": true
+      }
+    ]
+  },
+  "04-earring/cow/bnb.png": {
+    "src": "sources/bnb earring.png",
+    "parts": [
+      {
+        "left": 992,
+        "top": 452,
+        "width": 95
+      },
+      {
+        "left": 167,
+        "top": 452,
+        "width": 95,
+        "fliph": true
+      }
+    ]
+  },
+  "05-hat/bull/black cap.png": {
+    "src": "sources/black cap.png",
+    "parts": [
+      {
+        "left": 360,
+        "top": -35,
+        "width": 530
+      }
+    ]
+  },
+  "05-hat/cow/black cap.png": {
+    "src": "sources/black cap.png",
+    "parts": [
+      {
+        "left": 345,
+        "top": -30,
+        "width": 560
+      }
+    ]
+  },
+  "06-chain/bull/gold chain.png": {
+    "src": "sources/gold chain.png",
+    "parts": [
+      {
+        "left": 420,
+        "top": 930,
+        "width": 420,
+        "height": 310
+      }
+    ]
+  },
+  "06-chain/cow/gold chain.png": {
+    "src": "sources/gold chain.png",
+    "parts": [
+      {
+        "left": 366,
+        "top": 1020,
+        "width": 520,
+        "height": 250
+      }
+    ]
+  }
+}

@@ -82,6 +82,10 @@ async function removeWhite(src, dest) {
   console.log('wrote ' + dest + ' (' + pct + '% background removed, edge eroded ' + ERODE + 'px + feathered)');
 }
 
-const [src, dest] = process.argv.slice(2);
-if (!src || !dest) { console.error('usage: node scripts/remove-white.js <src> <dest>'); process.exit(1); }
-removeWhite(src, dest).catch((e) => { console.error(e); process.exit(1); });
+module.exports = { removeWhite };
+
+if (require.main === module) {
+  const [src, dest] = process.argv.slice(2);
+  if (!src || !dest) { console.error('usage: node scripts/remove-white.js <src> <dest>'); process.exit(1); }
+  removeWhite(src, dest).catch((e) => { console.error(e); process.exit(1); });
+}

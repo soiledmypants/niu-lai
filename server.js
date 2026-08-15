@@ -3,11 +3,14 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const sharp = require('sharp');
+const { renderPlacement } = require('./scripts/compose');
 
 const PORT = 5311;
 const ROOT = __dirname;
 const LAYERS_DIR = path.join(ROOT, 'layers');
 const OUT_DIR = path.join(ROOT, 'output');
+const SOURCES_DIR = path.join(ROOT, 'sources');
+const PLACEMENTS_PATH = path.join(ROOT, 'placements.json');
 
 const IMG_RE = /\.(png|webp|gif|jpg|jpeg)$/i;
 
@@ -15,6 +18,38 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
 app.use('/layers', express.static(LAYERS_DIR));
+app.use('/sources', express.static(SOURCES_DIR));
+
+// ---- movable accessory placements ----------------------------------------
+
+function readPlacements() {
+  try { return JSON.parse(fs.readFileSync(PLACEMENTS_PATH, 'utf8')); } catch { return {}; }
+}
+
+app.get('/api/placements', (_req, res) => res.json(readPlacements()));
+
+app.post('/api/place', async (req, res) => {
+  const { key, src, parts } = req.body || {};
+  if (!key || !src || !Array.isArray(parts) || !parts.length) {
+    return res.status(400).json({ error: 'key, src and parts are required' });
+  }
+  const dest = path.join(LAYERS_DIR, key);
+  const srcPath = path.join(ROOT, src);
+  if (!dest.startsWith(LAYERS_DIR) || !srcPath.startsWith(SOURCES_DIR)) {
+    return res.status(400).json({ error: 'bad path' });
+  }
+  if (!fs.existsSync(srcPath)) return res.status(400).json({ error: 'source not found: ' + src });
+  try {
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    await renderPlacement(srcPath, parts, dest);
+    const all = readPlacements();
+    all[key] = { src, parts };
+    fs.writeFileSync(PLACEMENTS_PATH, JSON.stringify(all, null, 2));
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: String((e && e.message) || e) });
+  }
+});
 
 // ---- layer scanning -------------------------------------------------------
 

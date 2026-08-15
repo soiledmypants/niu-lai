@@ -112,6 +112,22 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; image-rendering: pixelated;
   }
+  /* adjust mode: drag/scroll accessory placement */
+  .adj-part {
+    position: absolute;
+    cursor: move;
+    outline: 1px dashed rgba(198, 255, 0, 0.5);
+  }
+  .adj-part.active { outline: 2px solid var(--lime); }
+  #adjBar { display: none; border-bottom: 1px solid var(--lime); background: var(--panel2); padding: 8px 10px; }
+  #adjBar.on { display: block; }
+  #adjBar .adj-title { color: var(--lime); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
+  #adjBar .adj-help { color: var(--dim); font-size: 10px; margin: 4px 0 8px; }
+  #adjBar .adj-actions { display: flex; gap: 6px; }
+  #adjBar button { flex: 0 0 auto; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 11px; }
+  #adjBar button.save { background: var(--lime); color: #0a0a0c; font-weight: bold; border-color: var(--lime); }
+  #adjBar button.part-btn.active { color: var(--lime); border-color: var(--lime); }
+
   /* builder: one scroll/arrow row per layer */
   #builder { border-bottom: 1px solid var(--border); }
   .b-row {
@@ -212,6 +228,7 @@
     <div class="panel">
       <div class="panel-head"><span>Preview</span><span id="previewDims"></span></div>
       <div id="previewWrap"></div>
+      <div id="adjBar"></div>
       <div id="builder"></div>
       <div id="comboList"></div>
       <div class="btn-row">
@@ -259,6 +276,8 @@
 let layers = [];
 let validCombos = 0;
 let sel = []; // selected trait index per layer
+let placements = {}; // movable accessory placements, keyed by "05-hat/bull/black cap.png"
+let adj = null; // active adjust session: { key, src, parts, active, li }
 
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString('en-US');
@@ -266,6 +285,7 @@ const fmt = (n) => n.toLocaleString('en-US');
 async function loadLayers() {
   const r = await fetch('/api/layers');
   const data = await r.json();
+  placements = await (await fetch('/api/placements')).json();
   layers = data.layers;
   validCombos = data.validCombos;
   const bust = Date.now();
@@ -400,6 +420,14 @@ function renderBuilder() {
     next.onclick = () => cycle(li, 1);
 
     row.append(prev, thumb, info, count, next);
+    if (placements[layer.dir + '/' + t.rel]) {
+      const mv = document.createElement('button');
+      mv.className = 'b-btn';
+      mv.title = 'move / resize this trait';
+      mv.textContent = '✥';
+      mv.onclick = () => enterAdjust(li);
+      row.append(mv);
+    }
     row.addEventListener('wheel', (e) => {
       e.preventDefault();
       cycle(li, e.deltaY > 0 ? 1 : -1);
@@ -414,6 +442,7 @@ function renderPreview() {
   layers.forEach((layer, li) => {
     const t = layer.traits[sel[li]];
     if (!t) return;
+    if (adj && adj.li === li) return; // adjusted layer drawn as live parts below
     const img = document.createElement('img');
     img.src = t.url;
     if (li === 0) {
@@ -426,6 +455,130 @@ function renderPreview() {
     }
     wrap.appendChild(img);
   });
+  if (adj) renderAdjParts();
+  renderAdjBar();
+}
+
+// ---- adjust mode: move/resize accessory parts ----
+const CANVAS = 1254;
+
+function placementKey(li) {
+  const t = layers[li].traits[sel[li]];
+  return t ? layers[li].dir + '/' + t.rel : null;
+}
+
+function enterAdjust(li) {
+  const key = placementKey(li);
+  const p = placements[key];
+  if (!p) return;
+  adj = { key, src: p.src, parts: JSON.parse(JSON.stringify(p.parts)), active: 0, li };
+  renderAll();
+}
+
+function exitAdjust() { adj = null; renderAll(); }
+
+function renderAdjParts() {
+  const wrap = $('previewWrap');
+  adj.parts.forEach((p, i) => {
+    const img = document.createElement('img');
+    img.className = 'adj-part' + (i === adj.active ? ' active' : '');
+    img.src = '/' + adj.src;
+    img.draggable = false;
+    img.style.left = (p.left / CANVAS * 100) + '%';
+    img.style.top = (p.top / CANVAS * 100) + '%';
+    img.style.width = (p.width / CANVAS * 100) + '%';
+    img.style.height = p.height ? (p.height / CANVAS * 100) + '%' : 'auto';
+    img.style.objectFit = 'fill';
+    img.style.transform = (p.fliph ? 'scaleX(-1)' : '') + (p.flipv ? ' scaleY(-1)' : '');
+    img.onmousedown = (e) => {
+      e.preventDefault();
+      adj.active = i;
+      const f = wrap.clientWidth / CANVAS;
+      const startX = e.clientX, startY = e.clientY, startL = p.left, startT = p.top;
+      const move = (ev) => {
+        p.left = Math.round(startL + (ev.clientX - startX) / f);
+        p.top = Math.round(startT + (ev.clientY - startY) / f);
+        renderPreview();
+      };
+      const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
+      document.addEventListener('mousemove', move);
+      document.addEventListener('mouseup', up);
+      renderPreview();
+    };
+    wrap.appendChild(img);
+  });
+}
+
+function adjScale(factor) {
+  const p = adj.parts[adj.active];
+  const img = document.querySelectorAll('.adj-part')[adj.active];
+  const aspect = p.height ? p.height / p.width : (img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1);
+  const w2 = Math.max(10, Math.round(p.width * factor));
+  const h1 = p.height || Math.round(p.width * aspect);
+  const h2 = Math.round(w2 * aspect);
+  p.left = Math.round(p.left - (w2 - p.width) / 2);
+  p.top = Math.round(p.top - (h2 - h1) / 2);
+  p.width = w2;
+  if (p.height) p.height = h2;
+  renderPreview();
+}
+
+$('previewWrap').addEventListener('wheel', (e) => {
+  if (!adj) return;
+  e.preventDefault();
+  adjScale(e.deltaY > 0 ? 1 / 1.04 : 1.04);
+}, { passive: false });
+
+document.addEventListener('keydown', (e) => {
+  if (!adj) return;
+  const step = e.shiftKey ? 10 : 2;
+  const p = adj.parts[adj.active];
+  if (e.key === 'ArrowLeft') { p.left -= step; }
+  else if (e.key === 'ArrowRight') { p.left += step; }
+  else if (e.key === 'ArrowUp') { p.top -= step; }
+  else if (e.key === 'ArrowDown') { p.top += step; }
+  else if (e.key === 'Escape') { exitAdjust(); return; }
+  else return;
+  e.preventDefault();
+  renderPreview();
+});
+
+function renderAdjBar() {
+  const bar = $('adjBar');
+  if (!adj) { bar.className = ''; bar.innerHTML = ''; return; }
+  bar.className = 'on';
+  const t = layers[adj.li].traits[sel[adj.li]];
+  bar.innerHTML = '<div class="adj-title">MOVING: ' + layers[adj.li].label + ' / ' + t.name + '</div>' +
+    '<div class="adj-help">drag to move &middot; scroll on preview to resize &middot; arrow keys nudge (shift = big) &middot; esc = cancel</div>';
+  const actions = document.createElement('div');
+  actions.className = 'adj-actions';
+  if (adj.parts.length > 1) {
+    adj.parts.forEach((_, i) => {
+      const b = document.createElement('button');
+      b.className = 'part-btn' + (i === adj.active ? ' active' : '');
+      b.textContent = 'PART ' + (i + 1);
+      b.onclick = () => { adj.active = i; renderPreview(); };
+      actions.appendChild(b);
+    });
+  }
+  const save = document.createElement('button');
+  save.className = 'save';
+  save.textContent = 'SAVE';
+  save.onclick = async () => {
+    save.textContent = 'SAVING…';
+    const r = await fetch('/api/place', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: adj.key, src: adj.src, parts: adj.parts }),
+    });
+    if (r.ok) { placements[adj.key] = { src: adj.src, parts: adj.parts }; adj = null; await loadLayers(); }
+    else { save.textContent = 'ERROR'; }
+  };
+  const cancel = document.createElement('button');
+  cancel.textContent = 'CANCEL';
+  cancel.onclick = exitAdjust;
+  actions.append(save, cancel);
+  bar.appendChild(actions);
 }
 
 function renderComboList() {
