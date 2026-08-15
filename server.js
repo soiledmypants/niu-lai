@@ -388,7 +388,11 @@ async function runJob(layers, combos, opts) {
   }
 }
 
-app.listen(PORT, () => {
-  console.log('trait studio running at http://localhost:' + PORT);
-  console.log('layers dir: ' + LAYERS_DIR);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log('trait studio running at http://localhost:' + PORT);
+    console.log('layers dir: ' + LAYERS_DIR);
+  });
+}
+
+module.exports = { readLayers, countValidCombos, pickCombos, runJob, getJob: () => job, LAYERS_DIR, OUT_DIR };

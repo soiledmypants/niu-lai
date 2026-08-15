@@ -6,6 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "generate": "node scripts/generate.js",
     "samples": "node scripts/make-samples.js"
   },
   "dependencies": {
