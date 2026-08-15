@@ -154,6 +154,18 @@
   input:focus, textarea:focus { outline: none; border-color: var(--lime); }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 
+  .tpl-row {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; padding: 7px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  .tpl-row:last-of-type { border-bottom: none; }
+  .tpl-label { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: var(--text); }
+  .tpl-copy {
+    flex: 0 0 auto; width: 84px;
+    border: 1px solid var(--border); border-top: 1px solid var(--border);
+    padding: 6px 0;
+  }
   #genBar { height: 4px; background: var(--panel2); margin-top: 12px; display: none; }
   #genBarFill { height: 100%; width: 0%; background: var(--lime); }
   #genStatus { margin-top: 8px; color: var(--dim); min-height: 18px; word-break: break-all; }
@@ -207,6 +219,11 @@
         <div id="genBar"><div id="genBarFill"></div></div>
         <div id="genStatus"></div>
       </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span>Prompt templates — copy &amp; paste into ChatGPT</span></div>
+      <div class="panel-body" id="tplBody"></div>
     </div>
   </section>
 </main>
@@ -449,6 +466,70 @@ async function poll() {
     status.textContent = 'DONE — ' + fmt(j.total) + ' images + metadata in ' + j.outDir + ' (' + Math.round(j.ms / 1000) + 's)';
   }
 }
+
+// ---- copyable prompt templates ----
+const RULES = 'RULES: square image, exactly 1254x1254. Keep the cheap early-2000s low-poly 3D render look. ' +
+  'No text, no watermark, no shadow on the ground.';
+
+const TEMPLATES = [
+  {
+    label: 'ACCESSORY / TRAIT (hat, earring, cig, chain...)',
+    text: 'I am attaching my character. Add [ITEM] onto the character, positioned naturally [on its head / on its ear / in its mouth]. ' +
+      'Keep the character, pose, camera and framing EXACTLY the same as the attached image. ' +
+      'Then remove the character and the background completely and output ONLY the [ITEM], ' +
+      'left in exactly the same spot and at exactly the same size as where it sat on the character, ' +
+      'on a fully transparent background (transparent PNG). ' +
+      'Do NOT center the item, do NOT zoom in on it, do NOT turn it into a product shot — it must stay exactly where it was in the frame. ' +
+      RULES,
+  },
+  {
+    label: 'NEW BODY / SKIN',
+    text: 'I am attaching my character. Change it like this: [DESCRIBE THE NEW SKIN / VERSION]. ' +
+      'Keep EVERYTHING else identical to the attached image — same pose, same size, same position in the frame, same chest-up crop. ' +
+      'Plain flat white background, nothing else in the image. ' +
+      RULES,
+  },
+  {
+    label: 'NEW BACKGROUND',
+    text: 'Generate a [DESCRIBE THE SCENE] background in the same cheap early-2000s 3D render style as the attached image. ' +
+      'Empty scene only — no characters, no animals, nothing in the middle of the frame. ' +
+      RULES,
+  },
+];
+
+function renderTemplates() {
+  const el = $('tplBody');
+  el.innerHTML = '';
+  TEMPLATES.forEach((tpl, i) => {
+    const row = document.createElement('div');
+    row.className = 'tpl-row';
+    row.innerHTML = '<span class="tpl-label">' + tpl.label + '</span>';
+    const btn = document.createElement('button');
+    btn.className = 'tpl-copy';
+    btn.textContent = 'COPY';
+    btn.onclick = async () => {
+      try { await navigator.clipboard.writeText(tpl.text); }
+      catch (e) {
+        const ta = document.createElement('textarea');
+        ta.value = tpl.text;
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        ta.remove();
+      }
+      btn.textContent = 'COPIED';
+      setTimeout(() => { btn.textContent = 'COPY'; }, 1500);
+    };
+    row.appendChild(btn);
+    el.appendChild(row);
+  });
+  const hint = document.createElement('div');
+  hint.className = 'empty-hint';
+  hint.innerHTML = 'Fill the [BRACKETS], attach the base character image, and generate. ' +
+    'Then save the result to Downloads and tell Claude the filename + which layer it goes in.';
+  el.appendChild(hint);
+}
+renderTemplates();
 
 loadLayers();
 </script>
