@@ -18,6 +18,16 @@ app.use('/layers', express.static(LAYERS_DIR));
 
 // ---- layer scanning -------------------------------------------------------
 
+function parseTrait(dir, group, file) {
+  const base = file.replace(IMG_RE, '');
+  const m = base.match(/^(.*?)#(\d+)$/); // hashlips-style "name#weight.png"
+  const name = (m ? m[1] : base).replace(/[_]+/g, ' ').trim();
+  const weight = m ? Math.max(1, parseInt(m[2], 10)) : 1;
+  const parts = [dir, group, file].filter(Boolean).map(encodeURIComponent);
+  const rel = group ? group + '/' + file : file;
+  return { file, rel, name, weight, group, url: '/layers/' + parts.join('/') };
+}
+
 function readLayers() {
   if (!fs.existsSync(LAYERS_DIR)) return [];
   const dirs = fs
@@ -27,29 +37,57 @@ function readLayers() {
     .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
 
   return dirs.map((dir) => {
-    const files = fs
-      .readdirSync(path.join(LAYERS_DIR, dir))
-      .filter((f) => IMG_RE.test(f))
-      .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    const traits = files.map((file) => {
-      const base = file.replace(IMG_RE, '');
-      const m = base.match(/^(.*?)#(\d+)$/); // hashlips-style "name#weight.png"
-      const name = (m ? m[1] : base).replace(/[_]+/g, ' ').trim();
-      const weight = m ? Math.max(1, parseInt(m[2], 10)) : 1;
-      return {
-        file,
-        name,
-        weight,
-        url: '/layers/' + encodeURIComponent(dir) + '/' + encodeURIComponent(file),
-      };
-    });
+    const byName = (a, b) => a.localeCompare(b, undefined, { numeric: true });
+    const entries = fs.readdirSync(path.join(LAYERS_DIR, dir), { withFileTypes: true });
+    // subfolders = mutually exclusive groups (e.g. 02-body/bull, 02-body/cow → each NFT gets ONE)
+    const groups = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort(byName);
+    const rootFiles = entries.filter((e) => e.isFile() && IMG_RE.test(e.name)).map((e) => e.name).sort(byName);
+
+    const traits = rootFiles.map((f) => parseTrait(dir, null, f));
+    for (const g of groups) {
+      const files = fs.readdirSync(path.join(LAYERS_DIR, dir, g)).filter((f) => IMG_RE.test(f)).sort(byName);
+      for (const f of files) traits.push(parseTrait(dir, g, f));
+    }
     const label = dir.replace(/^\d+[-_. ]*/, '').replace(/[-_]+/g, ' ').trim() || dir;
-    return { dir, label, traits };
+    return { dir, label, groups, traits };
   });
 }
 
+// exact count of valid combos: grouped layers must all agree on the group
+// (ungrouped traits inside a grouped layer count as compatible with every group)
+function countValidCombos(layers) {
+  const withTraits = layers.filter((l) => l.traits.length > 0);
+  if (!withTraits.length) return 0;
+  const grouped = withTraits.filter((l) => l.traits.some((t) => t.group));
+  const ungroupedProduct = withTraits
+    .filter((l) => !l.traits.some((t) => t.group))
+    .reduce((n, l) => n * l.traits.length, 1);
+  if (!grouped.length) return ungroupedProduct;
+
+  const G = [...new Set(grouped.flatMap((l) => l.traits.filter((t) => t.group).map((t) => t.group)))];
+  let sum = 0;
+  for (const g of G) {
+    sum += grouped.reduce((n, l) => n * l.traits.filter((t) => t.group === g || !t.group).length, 1);
+  }
+  // combos where every grouped layer picked an ungrouped trait got counted once per group
+  const allUniversal = grouped.reduce((n, l) => n * l.traits.filter((t) => !t.group).length, 1);
+  return ungroupedProduct * (sum - (G.length - 1) * allUniversal);
+}
+
+function comboIsValid(layers, idx) {
+  let g = null;
+  for (let li = 0; li < layers.length; li++) {
+    const tg = layers[li].traits[idx[li]].group;
+    if (!tg) continue;
+    if (g && tg !== g) return false;
+    g = tg;
+  }
+  return true;
+}
+
 app.get('/api/layers', (_req, res) => {
-  res.json({ layers: readLayers() });
+  const layers = readLayers();
+  res.json({ layers, validCombos: countValidCombos(layers) });
 });
 
 // ---- combo picking --------------------------------------------------------
@@ -69,7 +107,8 @@ function pickCombos(layers, count) {
   const total = sizes.reduce((a, b) => a * b, 1);
 
   if (total <= 300000) {
-    // enumerate every combo, then weighted shuffle (Efraimidis–Spirakis) and take the top `count`
+    // enumerate every combo, drop group-mismatched ones, then weighted shuffle
+    // (Efraimidis–Spirakis) and take the top `count`
     const keyed = [];
     for (let n = 0; n < total; n++) {
       let x = n;
@@ -81,19 +120,31 @@ function pickCombos(layers, count) {
         idx.push(t);
         w *= layers[li].traits[t].weight;
       }
+      if (!comboIsValid(layers, idx)) continue;
       keyed.push({ idx, key: Math.pow(Math.random(), 1 / w) });
     }
     keyed.sort((a, b) => b.key - a.key);
     return keyed.slice(0, count).map((k) => k.idx);
   }
 
-  // huge trait space: rejection sampling
+  // huge trait space: rejection sampling constrained to one group per combo
+  const G = [...new Set(layers.flatMap((l) => l.traits.filter((t) => t.group).map((t) => t.group)))];
   const seen = new Set();
   const out = [];
   let attempts = 0;
   while (out.length < count && attempts < count * 500) {
     attempts++;
-    const idx = layers.map((l) => weightedPick(l.traits));
+    const g = G.length ? G[Math.floor(Math.random() * G.length)] : null;
+    let idx = [];
+    let ok = true;
+    for (const l of layers) {
+      const pool = l.traits.some((t) => t.group)
+        ? l.traits.map((t, ti) => ({ t, ti })).filter((x) => !x.t.group || x.t.group === g)
+        : l.traits.map((t, ti) => ({ t, ti }));
+      if (!pool.length) { ok = false; break; }
+      idx.push(pool[weightedPick(pool.map((x) => x.t))].ti);
+    }
+    if (!ok) continue;
     const dna = idx.join('-');
     if (seen.has(dna)) continue;
     seen.add(dna);
@@ -123,7 +174,7 @@ app.post('/api/generate', async (req, res) => {
   const layers = readLayers().filter((l) => l.traits.length > 0);
   if (!layers.length) return res.status(400).json({ error: 'no layer folders with images found in /layers' });
 
-  const total = layers.reduce((n, l) => n * l.traits.length, 1);
+  const total = countValidCombos(layers);
   if (total < count) {
     return res.status(400).json({ error: `only ${total} unique combos possible, need ${count} — add more traits` });
   }
@@ -131,7 +182,7 @@ app.post('/api/generate', async (req, res) => {
   // default output size = dimensions of the first trait image
   if (!width || !height) {
     const first = layers[0].traits[0];
-    const meta = await sharp(path.join(LAYERS_DIR, layers[0].dir, first.file)).metadata();
+    const meta = await sharp(path.join(LAYERS_DIR, layers[0].dir, first.rel)).metadata();
     width = width || meta.width;
     height = height || meta.height;
   }
@@ -162,11 +213,11 @@ async function runJob(layers, combos, opts) {
     const cache = new Map();
     async function traitBuf(li, ti) {
       const t = layers[li].traits[ti];
-      const key = layers[li].dir + '/' + t.file;
+      const key = layers[li].dir + '/' + t.rel;
       if (!cache.has(key)) {
         cache.set(
           key,
-          await sharp(path.join(LAYERS_DIR, layers[li].dir, t.file))
+          await sharp(path.join(LAYERS_DIR, layers[li].dir, t.rel))
             .resize(opts.width, opts.height, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
             .png()
             .toBuffer()
@@ -188,12 +239,16 @@ async function runJob(layers, combos, opts) {
         .png()
         .toFile(path.join(imgDir, id + '.png'));
 
+      const attributes = [];
+      const species = layers.map((l, li) => l.traits[combos[i][li]].group).find(Boolean);
+      if (species) attributes.push({ trait_type: 'species', value: species });
+      layers.forEach((l, li) => attributes.push({ trait_type: l.label, value: l.traits[combos[i][li]].name }));
       const meta = {
         name: opts.name + ' #' + id,
         description: opts.description,
         image: opts.baseUri + '/' + id + '.png',
         edition: id,
-        attributes: layers.map((l, li) => ({ trait_type: l.label, value: l.traits[combos[i][li]].name })),
+        attributes,
       };
       fs.writeFileSync(path.join(metaDir, id + '.json'), JSON.stringify(meta, null, 2));
       all.push(meta);
@@ -204,6 +259,12 @@ async function runJob(layers, combos, opts) {
 
     // trait rarity summary
     const rarity = {};
+    const speciesCounts = {};
+    combos.forEach((c) => {
+      const g = layers.map((l, li) => l.traits[c[li]].group).find(Boolean);
+      if (g) speciesCounts[g] = (speciesCounts[g] || 0) + 1;
+    });
+    if (Object.keys(speciesCounts).length) rarity.species = speciesCounts;
     layers.forEach((l, li) => {
       rarity[l.label] = {};
       combos.forEach((c) => {

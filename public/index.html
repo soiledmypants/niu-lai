@@ -84,6 +84,16 @@
   .trait .tweight { color: var(--dim); font-size: 10px; }
   .trait.selected .tname { color: var(--lime); }
 
+  .group-head {
+    color: var(--lime);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin: 10px 0 6px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 4px;
+  }
+  .group-head:first-child { margin-top: 0; }
   .empty-hint { color: var(--dim); padding: 8px 0; line-height: 1.6; }
   .empty-hint code { color: var(--lime); }
 
@@ -203,6 +213,7 @@
 
 <script>
 let layers = [];
+let validCombos = 0;
 let sel = []; // selected trait index per layer
 
 const $ = (id) => document.getElementById(id);
@@ -212,9 +223,26 @@ async function loadLayers() {
   const r = await fetch('/api/layers');
   const data = await r.json();
   layers = data.layers;
+  validCombos = data.validCombos;
   sel = layers.map(() => 0);
+  alignGroups(null);
   renderLayers();
   renderAll();
+}
+
+// grouped layers (bull/cow) must agree — switch other layers' selections to group g
+function alignGroups(g) {
+  if (g === null) {
+    const first = layers.flatMap((l, li) => (l.traits[sel[li]] ? [l.traits[sel[li]].group] : [])).find(Boolean);
+    if (!first) return;
+    g = first;
+  }
+  layers.forEach((l, li) => {
+    const cur = l.traits[sel[li]];
+    if (!cur || !cur.group || cur.group === g) return;
+    const ti = l.traits.findIndex((t) => t.group === g || !t.group);
+    if (ti >= 0) sel[li] = ti;
+  });
 }
 
 function renderLayers() {
@@ -238,19 +266,36 @@ function renderLayers() {
     if (!layer.traits.length) {
       body.innerHTML = '<div class="empty-hint">Empty — drop PNGs into <code>layers/' + layer.dir + '/</code></div>';
     } else {
-      const grid = document.createElement('div');
-      grid.className = 'trait-grid';
-      layer.traits.forEach((t, ti) => {
-        const card = document.createElement('div');
-        card.className = 'trait' + (sel[li] === ti ? ' selected' : '');
-        card.dataset.li = li; card.dataset.ti = ti;
-        card.innerHTML = '<img src="' + t.url + '" loading="lazy">' +
-          '<div class="tname">' + t.name + '</div>' +
-          '<div class="tweight">w:' + t.weight + '</div>';
-        card.onclick = () => { sel[li] = ti; renderLayers(); renderAll(); };
-        grid.appendChild(card);
+      // one section per group (bull / cow), plus one for ungrouped traits
+      const sections = [];
+      if (layer.traits.some((t) => !t.group)) sections.push(null);
+      (layer.groups || []).forEach((g) => sections.push(g));
+      sections.forEach((g) => {
+        const traits = layer.traits.map((t, ti) => ({ t, ti })).filter((x) => x.t.group === g);
+        if (!traits.length) return;
+        if (g !== null || sections.length > 1) {
+          const gh = document.createElement('div');
+          gh.className = 'group-head';
+          gh.textContent = (g === null ? 'shared' : g) + ' — ' + traits.length;
+          body.appendChild(gh);
+        }
+        const grid = document.createElement('div');
+        grid.className = 'trait-grid';
+        traits.forEach(({ t, ti }) => {
+          const card = document.createElement('div');
+          card.className = 'trait' + (sel[li] === ti ? ' selected' : '');
+          card.innerHTML = '<img src="' + t.url + '" loading="lazy">' +
+            '<div class="tname">' + t.name + '</div>' +
+            '<div class="tweight">w:' + t.weight + '</div>';
+          card.onclick = () => {
+            sel[li] = ti;
+            if (t.group) alignGroups(t.group);
+            renderLayers(); renderAll();
+          };
+          grid.appendChild(card);
+        });
+        body.appendChild(grid);
       });
-      body.appendChild(grid);
     }
     panel.appendChild(body);
     col.appendChild(panel);
@@ -285,36 +330,45 @@ function renderPreview() {
 
 function renderComboList() {
   const el = $('comboList');
-  el.innerHTML = layers.map((layer, li) => {
+  const species = layers.map((l, li) => (l.traits[sel[li]] || {}).group).find(Boolean);
+  let html = species ? '<div><span class="k">species</span> — <span class="v">' + species + '</span></div>' : '';
+  html += layers.map((layer, li) => {
     const t = layer.traits[sel[li]];
     return '<div><span class="k">' + layer.label + '</span> — <span class="v">' + (t ? t.name : '—') + '</span></div>';
-  }).join('') || '<span class="empty-hint">no layers</span>';
+  }).join('');
+  el.innerHTML = html || '<span class="empty-hint">no layers</span>';
 }
 
-function totalCombos() {
-  const withTraits = layers.filter((l) => l.traits.length > 0);
-  if (!withTraits.length) return 0;
-  return withTraits.reduce((n, l) => n * l.traits.length, 1);
+function layerTerm(l) {
+  if (!l.traits.some((t) => t.group)) return String(l.traits.length);
+  const parts = [];
+  const ungrouped = l.traits.filter((t) => !t.group).length;
+  if (ungrouped) parts.push(ungrouped);
+  (l.groups || []).forEach((g) => {
+    const n = l.traits.filter((t) => t.group === g).length;
+    if (n) parts.push(n + ' ' + g);
+  });
+  return '(' + parts.join(' + ') + ')';
 }
 
 function renderMath() {
   const target = parseInt($('inCount').value, 10) || 1111;
   const withTraits = layers.filter((l) => l.traits.length > 0);
-  const total = totalCombos();
+  const total = validCombos;
   const badge = $('comboBadge');
   const ok = total >= target;
   badge.innerHTML = '<b class="' + (ok ? 'ok' : 'bad') + '">' + fmt(total) + '</b> / ' + fmt(target) + ' combos';
 
   const el = $('mathBody');
   if (!withTraits.length) { el.textContent = 'Add trait images first.'; return; }
+  const nums = withTraits.map(layerTerm).join(' × ');
   const formula = withTraits.map((l) => l.traits.length + ' ' + l.label).join(' × ');
-  const nums = withTraits.map((l) => l.traits.length).join(' × ');
   let html = '<div class="formula">' + nums + ' = <b>' + fmt(total) + '</b> unique combos</div>';
-  html += '<div style="color:var(--dim)">' + formula + '</div>';
+  html += '<div style="color:var(--dim)">' + formula + ' (bull/cow never mix)</div>';
   if (ok) {
     html += '<div class="verdict-ok">ENOUGH for ' + fmt(target) + ' — ' + fmt(total - target) + ' spare</div>';
   } else {
-    html += '<div class="verdict-bad">SHORT BY ' + fmt(target - total) + ' — add more traits (e.g. 10 × 12 × 10 = 1,200)</div>';
+    html += '<div class="verdict-bad">SHORT BY ' + fmt(target - total) + ' — add more traits or layers</div>';
   }
   el.innerHTML = html;
 }
@@ -327,7 +381,16 @@ function weightedRandom(traits) {
 }
 
 $('btnRandom').onclick = () => {
-  sel = layers.map((l) => (l.traits.length ? weightedRandom(l.traits) : 0));
+  const G = [...new Set(layers.flatMap((l) => l.traits.filter((t) => t.group).map((t) => t.group)))];
+  const g = G.length ? G[Math.floor(Math.random() * G.length)] : null;
+  sel = layers.map((l) => {
+    if (!l.traits.length) return 0;
+    const pool = l.traits.some((t) => t.group)
+      ? l.traits.map((t, ti) => ({ t, ti })).filter((x) => !x.t.group || x.t.group === g)
+      : l.traits.map((t, ti) => ({ t, ti }));
+    if (!pool.length) return 0;
+    return pool[weightedRandom(pool.map((x) => x.t))].ti;
+  });
   renderLayers();
   renderAll();
 };
