@@ -112,6 +112,32 @@
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: contain; image-rendering: pixelated;
   }
+  /* builder: one scroll/arrow row per layer */
+  #builder { border-bottom: 1px solid var(--border); }
+  .b-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 5px 8px;
+    border-bottom: 1px solid var(--panel2);
+    user-select: none;
+  }
+  .b-row:last-child { border-bottom: none; }
+  .b-row:hover { background: var(--panel2); }
+  .b-btn {
+    flex: 0 0 30px; width: 30px; padding: 8px 0;
+    border: 1px solid var(--border); border-top: 1px solid var(--border);
+    font-size: 11px; line-height: 1;
+  }
+  .b-thumb {
+    flex: 0 0 40px; width: 40px; height: 40px; object-fit: contain;
+    image-rendering: pixelated;
+    background: conic-gradient(#1c1c22 0 25%, #121216 0 50%, #1c1c22 0 75%, #121216 0) 0 0 / 10px 10px;
+    border: 1px solid var(--border);
+  }
+  .b-info { flex: 1; min-width: 0; }
+  .b-layer { color: var(--dim); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .b-trait { color: var(--lime); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .b-trait .b-group { color: var(--text); }
+  .b-count { flex: 0 0 auto; color: var(--dim); font-size: 10px; }
   #comboList { padding: 10px 12px; border-bottom: 1px solid var(--border); line-height: 1.8; }
   #comboList .k { color: var(--dim); text-transform: uppercase; font-size: 11px; }
   #comboList .v { color: var(--lime); }
@@ -186,6 +212,7 @@
     <div class="panel">
       <div class="panel-head"><span>Preview</span><span id="previewDims"></span></div>
       <div id="previewWrap"></div>
+      <div id="builder"></div>
       <div id="comboList"></div>
       <div class="btn-row">
         <button id="btnRandom">Randomize</button>
@@ -259,7 +286,9 @@ function alignGroups(g) {
   layers.forEach((l, li) => {
     const cur = l.traits[sel[li]];
     if (!cur || !cur.group || cur.group === g) return;
-    const ti = l.traits.findIndex((t) => t.group === g || !t.group);
+    // same trait exists for the new species (e.g. bull cap → cow cap)? follow it
+    const same = l.traits.findIndex((t) => t.group === g && t.name === cur.name);
+    const ti = same >= 0 ? same : l.traits.findIndex((t) => t.group === g || !t.group);
     if (ti >= 0) sel[li] = ti;
   });
 }
@@ -323,8 +352,60 @@ function renderLayers() {
 
 function renderAll() {
   renderPreview();
+  renderBuilder();
   renderComboList();
   renderMath();
+}
+
+function cycle(li, dir) {
+  const n = layers[li].traits.length;
+  if (!n) return;
+  sel[li] = (sel[li] + dir + n) % n;
+  const t = layers[li].traits[sel[li]];
+  if (t.group) alignGroups(t.group);
+  renderLayers();
+  renderAll();
+}
+
+function renderBuilder() {
+  const el = $('builder');
+  el.innerHTML = '';
+  layers.forEach((layer, li) => {
+    if (!layer.traits.length) return;
+    const t = layer.traits[sel[li]];
+    const row = document.createElement('div');
+    row.className = 'b-row';
+
+    const prev = document.createElement('button');
+    prev.className = 'b-btn';
+    prev.textContent = '◀';
+    prev.onclick = () => cycle(li, -1);
+
+    const thumb = document.createElement('img');
+    thumb.className = 'b-thumb';
+    thumb.src = t.url;
+
+    const info = document.createElement('div');
+    info.className = 'b-info';
+    info.innerHTML = '<div class="b-layer">' + layer.label + '</div>' +
+      '<div class="b-trait">' + (t.group ? '<span class="b-group">' + t.group + ' / </span>' : '') + t.name + '</div>';
+
+    const count = document.createElement('div');
+    count.className = 'b-count';
+    count.textContent = (sel[li] + 1) + '/' + layer.traits.length;
+
+    const next = document.createElement('button');
+    next.className = 'b-btn';
+    next.textContent = '▶';
+    next.onclick = () => cycle(li, 1);
+
+    row.append(prev, thumb, info, count, next);
+    row.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      cycle(li, e.deltaY > 0 ? 1 : -1);
+    }, { passive: false });
+    el.appendChild(row);
+  });
 }
 
 function renderPreview() {
