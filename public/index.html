@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TRAIT STUDIO — BNB NFT</title>
+<style>
+  :root {
+    --bg: #0a0a0c;
+    --panel: #101014;
+    --panel2: #16161c;
+    --border: #26262c;
+    --lime: #c6ff00;
+    --red: #ff3b3b;
+    --text: #e8e8ea;
+    --dim: #8a8a92;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; border-radius: 0 !important; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: Consolas, "IBM Plex Mono", ui-monospace, monospace;
+    font-size: 13px;
+  }
+  header {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+  header h1 { font-size: 15px; letter-spacing: 2px; }
+  header h1 span { color: var(--lime); }
+  #comboBadge { font-size: 13px; letter-spacing: 1px; }
+  #comboBadge b.ok { color: var(--lime); }
+  #comboBadge b.bad { color: var(--red); }
+
+  main {
+    display: grid;
+    grid-template-columns: 1fr 440px;
+    gap: 16px;
+    padding: 16px 20px;
+    max-width: 1500px;
+    margin: 0 auto;
+  }
+  @media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    margin-bottom: 16px;
+  }
+  .panel-head {
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--border);
+    color: var(--dim);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    font-size: 11px;
+    display: flex; justify-content: space-between;
+  }
+  .panel-body { padding: 12px; }
+
+  .trait-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+    gap: 8px;
+  }
+  .trait {
+    background: var(--panel2);
+    border: 1px solid var(--border);
+    cursor: pointer;
+    padding: 6px;
+    text-align: center;
+  }
+  .trait:hover { border-color: var(--dim); }
+  .trait.selected { border-color: var(--lime); box-shadow: inset 0 0 0 1px var(--lime); }
+  .trait img {
+    width: 100%; aspect-ratio: 1/1; object-fit: contain; display: block;
+    image-rendering: pixelated;
+    background:
+      conic-gradient(#1c1c22 0 25%, #121216 0 50%, #1c1c22 0 75%, #121216 0) 0 0 / 16px 16px;
+  }
+  .trait .tname { margin-top: 5px; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .trait .tweight { color: var(--dim); font-size: 10px; }
+  .trait.selected .tname { color: var(--lime); }
+
+  .empty-hint { color: var(--dim); padding: 8px 0; line-height: 1.6; }
+  .empty-hint code { color: var(--lime); }
+
+  /* right column */
+  #right { position: sticky; top: 16px; align-self: start; }
+  #previewWrap {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 1 / 1;
+    background:
+      conic-gradient(#1c1c22 0 25%, #121216 0 50%, #1c1c22 0 75%, #121216 0) 0 0 / 24px 24px;
+    border-bottom: 1px solid var(--border);
+    overflow: hidden;
+  }
+  #previewWrap img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; image-rendering: pixelated;
+  }
+  #comboList { padding: 10px 12px; border-bottom: 1px solid var(--border); line-height: 1.8; }
+  #comboList .k { color: var(--dim); text-transform: uppercase; font-size: 11px; }
+  #comboList .v { color: var(--lime); }
+
+  .btn-row { display: flex; }
+  button {
+    flex: 1;
+    background: var(--panel2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-top: none;
+    padding: 11px;
+    font-family: inherit;
+    font-size: 12px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  button:hover { color: var(--lime); border-color: var(--dim); }
+  button.primary { background: var(--lime); color: #0a0a0c; font-weight: bold; border-color: var(--lime); }
+  button.primary:hover { background: #d8ff3d; color: #0a0a0c; }
+  button:disabled { opacity: 0.4; cursor: default; }
+
+  #mathBody { line-height: 1.9; }
+  #mathBody .formula { font-size: 15px; }
+  #mathBody .formula b { color: var(--lime); }
+  .verdict-ok { color: var(--lime); }
+  .verdict-bad { color: var(--red); }
+
+  label { display: block; color: var(--dim); font-size: 11px; text-transform: uppercase; letter-spacing: 1px; margin: 10px 0 3px; }
+  input, textarea {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 8px;
+  }
+  input:focus, textarea:focus { outline: none; border-color: var(--lime); }
+  .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+  #genBar { height: 4px; background: var(--panel2); margin-top: 12px; display: none; }
+  #genBarFill { height: 100%; width: 0%; background: var(--lime); }
+  #genStatus { margin-top: 8px; color: var(--dim); min-height: 18px; word-break: break-all; }
+  #genStatus.err { color: var(--red); }
+  #genStatus.ok { color: var(--lime); }
+</style>
+</head>
+<body>
+<header>
+  <h1>TRAIT STUDIO <span>//</span> BNB NFT</h1>
+  <div id="comboBadge">—</div>
+</header>
+
+<main>
+  <section id="layersCol"></section>
+
+  <section id="right">
+    <div class="panel">
+      <div class="panel-head"><span>Preview</span><span id="previewDims"></span></div>
+      <div id="previewWrap"></div>
+      <div id="comboList"></div>
+      <div class="btn-row">
+        <button id="btnRandom">Randomize</button>
+        <button id="btnRescan">Rescan layers</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span>Combo math</span></div>
+      <div class="panel-body" id="mathBody">—</div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-head"><span>Generate collection</span></div>
+      <div class="panel-body">
+        <div class="two-col">
+          <div><label>Supply</label><input id="inCount" type="number" value="1111"></div>
+          <div><label>Collection name</label><input id="inName" value="BNB NFT"></div>
+        </div>
+        <label>Description</label>
+        <textarea id="inDesc" rows="2"></textarea>
+        <label>Base URI (image prefix in metadata)</label>
+        <input id="inBase" value="ipfs://REPLACE_WITH_CID">
+        <div class="two-col">
+          <div><label>Width (blank = source size)</label><input id="inW" type="number" placeholder="auto"></div>
+          <div><label>Height (blank = source size)</label><input id="inH" type="number" placeholder="auto"></div>
+        </div>
+        <div style="margin-top:14px" class="btn-row">
+          <button id="btnGen" class="primary" style="border-top:1px solid var(--lime)">Generate</button>
+        </div>
+        <div id="genBar"><div id="genBarFill"></div></div>
+        <div id="genStatus"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script>
+let layers = [];
+let sel = []; // selected trait index per layer
+
+const $ = (id) => document.getElementById(id);
+const fmt = (n) => n.toLocaleString('en-US');
+
+async function loadLayers() {
+  const r = await fetch('/api/layers');
+  const data = await r.json();
+  layers = data.layers;
+  sel = layers.map(() => 0);
+  renderLayers();
+  renderAll();
+}
+
+function renderLayers() {
+  const col = $('layersCol');
+  col.innerHTML = '';
+  if (!layers.length) {
+    col.innerHTML = '<div class="panel"><div class="panel-body empty-hint">No layer folders found.<br>' +
+      'Create folders inside <code>layers/</code> like <code>01-background</code>, <code>02-color</code>, <code>03-body</code> and drop PNGs in them.<br>' +
+      'Folder number prefix = stacking order (01 is the bottom).</div></div>';
+    return;
+  }
+  layers.forEach((layer, li) => {
+    const panel = document.createElement('div');
+    panel.className = 'panel';
+    const head = document.createElement('div');
+    head.className = 'panel-head';
+    head.innerHTML = '<span>' + layer.dir + '</span><span>' + layer.traits.length + ' traits</span>';
+    panel.appendChild(head);
+    const body = document.createElement('div');
+    body.className = 'panel-body';
+    if (!layer.traits.length) {
+      body.innerHTML = '<div class="empty-hint">Empty — drop PNGs into <code>layers/' + layer.dir + '/</code></div>';
+    } else {
+      const grid = document.createElement('div');
+      grid.className = 'trait-grid';
+      layer.traits.forEach((t, ti) => {
+        const card = document.createElement('div');
+        card.className = 'trait' + (sel[li] === ti ? ' selected' : '');
+        card.dataset.li = li; card.dataset.ti = ti;
+        card.innerHTML = '<img src="' + t.url + '" loading="lazy">' +
+          '<div class="tname">' + t.name + '</div>' +
+          '<div class="tweight">w:' + t.weight + '</div>';
+        card.onclick = () => { sel[li] = ti; renderLayers(); renderAll(); };
+        grid.appendChild(card);
+      });
+      body.appendChild(grid);
+    }
+    panel.appendChild(body);
+    col.appendChild(panel);
+  });
+}
+
+function renderAll() {
+  renderPreview();
+  renderComboList();
+  renderMath();
+}
+
+function renderPreview() {
+  const wrap = $('previewWrap');
+  wrap.innerHTML = '';
+  layers.forEach((layer, li) => {
+    const t = layer.traits[sel[li]];
+    if (!t) return;
+    const img = document.createElement('img');
+    img.src = t.url;
+    if (li === 0) {
+      img.onload = () => {
+        if (img.naturalWidth && img.naturalHeight) {
+          wrap.style.aspectRatio = img.naturalWidth + ' / ' + img.naturalHeight;
+          $('previewDims').textContent = img.naturalWidth + '×' + img.naturalHeight;
+        }
+      };
+    }
+    wrap.appendChild(img);
+  });
+}
+
+function renderComboList() {
+  const el = $('comboList');
+  el.innerHTML = layers.map((layer, li) => {
+    const t = layer.traits[sel[li]];
+    return '<div><span class="k">' + layer.label + '</span> — <span class="v">' + (t ? t.name : '—') + '</span></div>';
+  }).join('') || '<span class="empty-hint">no layers</span>';
+}
+
+function totalCombos() {
+  const withTraits = layers.filter((l) => l.traits.length > 0);
+  if (!withTraits.length) return 0;
+  return withTraits.reduce((n, l) => n * l.traits.length, 1);
+}
+
+function renderMath() {
+  const target = parseInt($('inCount').value, 10) || 1111;
+  const withTraits = layers.filter((l) => l.traits.length > 0);
+  const total = totalCombos();
+  const badge = $('comboBadge');
+  const ok = total >= target;
+  badge.innerHTML = '<b class="' + (ok ? 'ok' : 'bad') + '">' + fmt(total) + '</b> / ' + fmt(target) + ' combos';
+
+  const el = $('mathBody');
+  if (!withTraits.length) { el.textContent = 'Add trait images first.'; return; }
+  const formula = withTraits.map((l) => l.traits.length + ' ' + l.label).join(' × ');
+  const nums = withTraits.map((l) => l.traits.length).join(' × ');
+  let html = '<div class="formula">' + nums + ' = <b>' + fmt(total) + '</b> unique combos</div>';
+  html += '<div style="color:var(--dim)">' + formula + '</div>';
+  if (ok) {
+    html += '<div class="verdict-ok">ENOUGH for ' + fmt(target) + ' — ' + fmt(total - target) + ' spare</div>';
+  } else {
+    html += '<div class="verdict-bad">SHORT BY ' + fmt(target - total) + ' — add more traits (e.g. 10 × 12 × 10 = 1,200)</div>';
+  }
+  el.innerHTML = html;
+}
+
+function weightedRandom(traits) {
+  const total = traits.reduce((a, t) => a + t.weight, 0);
+  let r = Math.random() * total;
+  for (let i = 0; i < traits.length; i++) { r -= traits[i].weight; if (r <= 0) return i; }
+  return traits.length - 1;
+}
+
+$('btnRandom').onclick = () => {
+  sel = layers.map((l) => (l.traits.length ? weightedRandom(l.traits) : 0));
+  renderLayers();
+  renderAll();
+};
+$('btnRescan').onclick = loadLayers;
+$('inCount').oninput = renderMath;
+
+// ---- generation ----
+let polling = null;
+
+$('btnGen').onclick = async () => {
+  const status = $('genStatus');
+  status.className = '';
+  status.textContent = 'starting…';
+  const body = {
+    count: parseInt($('inCount').value, 10) || 1111,
+    name: $('inName').value,
+    description: $('inDesc').value,
+    baseUri: $('inBase').value,
+    width: parseInt($('inW').value, 10) || 0,
+    height: parseInt($('inH').value, 10) || 0,
+  };
+  const r = await fetch('/api/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const data = await r.json();
+  if (!r.ok) { status.className = 'err'; status.textContent = 'ERROR: ' + data.error; return; }
+  $('btnGen').disabled = true;
+  $('genBar').style.display = 'block';
+  polling = setInterval(poll, 400);
+};
+
+async function poll() {
+  const r = await fetch('/api/progress');
+  const j = await r.json();
+  const status = $('genStatus');
+  if (j.error) {
+    clearInterval(polling);
+    $('btnGen').disabled = false;
+    status.className = 'err';
+    status.textContent = 'ERROR: ' + j.error;
+    return;
+  }
+  const pct = j.total ? Math.round((j.done / j.total) * 100) : 0;
+  $('genBarFill').style.width = pct + '%';
+  if (j.running) {
+    status.className = '';
+    status.textContent = 'generating ' + fmt(j.done) + ' / ' + fmt(j.total) + ' (' + pct + '%)';
+  } else if (j.done > 0 && j.done === j.total) {
+    clearInterval(polling);
+    $('btnGen').disabled = false;
+    status.className = 'ok';
+    status.textContent = 'DONE — ' + fmt(j.total) + ' images + metadata in ' + j.outDir + ' (' + Math.round(j.ms / 1000) + 's)';
+  }
+}
+
+loadLayers();
+</script>
+</body>
+</html>

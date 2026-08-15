@@ -1,0 +1,15 @@
+{
+  "name": "bnb-nft",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Trait studio + generator for a 1,111-piece layered NFT collection on BNB Chain",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "samples": "node scripts/make-samples.js"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "sharp": "^0.33.5"
+  }
+}
