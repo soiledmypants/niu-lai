@@ -119,14 +119,28 @@
     outline: 1px dashed rgba(198, 255, 0, 0.5);
   }
   .adj-part.active { outline: 2px solid var(--lime); }
-  #adjBar { display: none; border-bottom: 1px solid var(--lime); background: var(--panel2); padding: 8px 10px; }
+  #adjBar { display: none; border-bottom: 1px solid var(--lime); background: var(--panel2); padding: 10px 12px; }
   #adjBar.on { display: block; }
   #adjBar .adj-title { color: var(--lime); font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
   #adjBar .adj-help { color: var(--dim); font-size: 10px; margin: 4px 0 8px; }
-  #adjBar .adj-actions { display: flex; gap: 6px; }
+  #adjBar .adj-actions { display: flex; gap: 6px; margin-top: 10px; }
   #adjBar button { flex: 0 0 auto; padding: 7px 12px; border-top: 1px solid var(--border); font-size: 11px; }
   #adjBar button.save { background: var(--lime); color: #0a0a0c; font-weight: bold; border-color: var(--lime); }
   #adjBar button.part-btn.active { color: var(--lime); border-color: var(--lime); }
+  .adj-slider {
+    display: grid; grid-template-columns: 44px 1fr 52px; gap: 8px;
+    align-items: center; margin: 6px 0;
+  }
+  .adj-slider .sl-label { color: var(--dim); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; }
+  .adj-slider .sl-val { color: var(--lime); font-size: 11px; text-align: right; }
+  input[type="range"] {
+    -webkit-appearance: none; appearance: none;
+    width: 100%; height: 4px; background: var(--border); outline: none; padding: 0; border: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; background: var(--lime); cursor: pointer; border: none;
+  }
 
   /* builder: one scroll/arrow row per layer */
   #builder { border-bottom: 1px solid var(--border); }
@@ -371,7 +385,9 @@ function renderLayers() {
 }
 
 function renderAll() {
+  if (adj && placementKey(adj.li) !== adj.key) adj = null; // selection moved off the adjusted trait
   renderPreview();
+  renderAdjBar();
   renderBuilder();
   renderComboList();
   renderMath();
@@ -456,7 +472,6 @@ function renderPreview() {
     wrap.appendChild(img);
   });
   if (adj) renderAdjParts();
-  renderAdjBar();
 }
 
 // ---- adjust mode: move/resize accessory parts ----
@@ -498,6 +513,7 @@ function renderAdjParts() {
       const move = (ev) => {
         p.left = Math.round(startL + (ev.clientX - startX) / f);
         p.top = Math.round(startT + (ev.clientY - startY) / f);
+        syncAdjSliders();
         renderPreview();
       };
       const up = () => { document.removeEventListener('mousemove', move); document.removeEventListener('mouseup', up); };
@@ -520,6 +536,7 @@ function adjScale(factor) {
   p.top = Math.round(p.top - (h2 - h1) / 2);
   p.width = w2;
   if (p.height) p.height = h2;
+  syncAdjSliders();
   renderPreview();
 }
 
@@ -540,30 +557,85 @@ document.addEventListener('keydown', (e) => {
   else if (e.key === 'Escape') { exitAdjust(); return; }
   else return;
   e.preventDefault();
+  syncAdjSliders();
   renderPreview();
 });
 
+let adjSliders = null; // { x, y, size, labels: {x,y,size} } for live sync while dragging
+
+function adjSliderRow(label, min, max, value, oninput) {
+  const row = document.createElement('div');
+  row.className = 'adj-slider';
+  const lab = document.createElement('span');
+  lab.className = 'sl-label';
+  lab.textContent = label;
+  const range = document.createElement('input');
+  range.type = 'range';
+  range.min = min; range.max = max; range.value = value;
+  const val = document.createElement('span');
+  val.className = 'sl-val';
+  val.textContent = value;
+  range.oninput = () => { val.textContent = range.value; oninput(parseInt(range.value, 10)); };
+  row.append(lab, range, val);
+  return { row, range, val };
+}
+
+function syncAdjSliders() {
+  if (!adj || !adjSliders) return;
+  const p = adj.parts[adj.active];
+  adjSliders.x.range.value = p.left; adjSliders.x.val.textContent = p.left;
+  adjSliders.y.range.value = p.top; adjSliders.y.val.textContent = p.top;
+  adjSliders.size.range.value = p.width; adjSliders.size.val.textContent = p.width;
+}
+
 function renderAdjBar() {
   const bar = $('adjBar');
-  if (!adj) { bar.className = ''; bar.innerHTML = ''; return; }
+  if (!adj) { bar.className = ''; bar.innerHTML = ''; adjSliders = null; return; }
   bar.className = 'on';
   const t = layers[adj.li].traits[sel[adj.li]];
-  bar.innerHTML = '<div class="adj-title">MOVING: ' + layers[adj.li].label + ' / ' + t.name + '</div>' +
-    '<div class="adj-help">drag to move &middot; scroll on preview to resize &middot; arrow keys nudge (shift = big) &middot; esc = cancel</div>';
-  const actions = document.createElement('div');
-  actions.className = 'adj-actions';
+  bar.innerHTML = '<div class="adj-title">ADJUSTING: ' + layers[adj.li].label + ' / ' + t.name +
+    (t.group ? ' (' + t.group + ')' : '') + '</div>' +
+    '<div class="adj-help">sliders or drag on image &middot; scroll on image = resize &middot; arrows nudge &middot; esc cancel</div>';
+
   if (adj.parts.length > 1) {
+    const tabs = document.createElement('div');
+    tabs.className = 'adj-actions';
+    tabs.style.marginTop = '0';
     adj.parts.forEach((_, i) => {
       const b = document.createElement('button');
       b.className = 'part-btn' + (i === adj.active ? ' active' : '');
-      b.textContent = 'PART ' + (i + 1);
-      b.onclick = () => { adj.active = i; renderPreview(); };
-      actions.appendChild(b);
+      b.textContent = i === 0 ? 'RIGHT EAR' : 'LEFT EAR';
+      if (adj.parts.length > 2) b.textContent = 'PART ' + (i + 1);
+      b.onclick = () => { adj.active = i; renderPreview(); renderAdjBar(); };
+      tabs.appendChild(b);
     });
+    bar.appendChild(tabs);
   }
+
+  const p = adj.parts[adj.active];
+  const x = adjSliderRow('X', -300, 1300, p.left, (v) => { p.left = v; renderPreview(); });
+  const y = adjSliderRow('Y', -300, 1300, p.top, (v) => { p.top = v; renderPreview(); });
+  const size = adjSliderRow('SIZE', 20, 1300, p.width, (v) => {
+    // resize around the part's center, like the scroll wheel does
+    const img = document.querySelectorAll('.adj-part')[adj.active];
+    const aspect = p.height ? p.height / p.width : (img && img.naturalWidth ? img.naturalHeight / img.naturalWidth : 1);
+    const h1 = p.height || Math.round(p.width * aspect);
+    const h2 = Math.round(v * aspect);
+    p.left = Math.round(p.left - (v - p.width) / 2);
+    p.top = Math.round(p.top - (h2 - h1) / 2);
+    p.width = v;
+    if (p.height) p.height = h2;
+    syncAdjSliders();
+    renderPreview();
+  });
+  bar.append(x.row, y.row, size.row);
+  adjSliders = { x, y, size };
+
+  const actions = document.createElement('div');
+  actions.className = 'adj-actions';
   const save = document.createElement('button');
   save.className = 'save';
-  save.textContent = 'SAVE';
+  save.textContent = 'SAVE POSITION';
   save.onclick = async () => {
     save.textContent = 'SAVING…';
     const r = await fetch('/api/place', {
@@ -757,6 +829,28 @@ function renderTemplates() {
     row.appendChild(btn);
     el.appendChild(row);
   });
+  // copy every trait's saved position (per species) as JSON — paste this to Claude
+  const posRow = document.createElement('div');
+  posRow.className = 'tpl-row';
+  posRow.innerHTML = '<span class="tpl-label">Trait positions (paste to Claude)</span>';
+  const posBtn = document.createElement('button');
+  posBtn.className = 'tpl-copy';
+  posBtn.textContent = 'COPY';
+  posBtn.onclick = async () => {
+    const text = 'NIU LAI trait placements (canvas 1254x1254, left/top/width px):\n' +
+      JSON.stringify(placements, null, 2);
+    try { await navigator.clipboard.writeText(text); }
+    catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      document.execCommand('copy'); ta.remove();
+    }
+    posBtn.textContent = 'COPIED';
+    setTimeout(() => { posBtn.textContent = 'COPY'; }, 1500);
+  };
+  posRow.appendChild(posBtn);
+  el.appendChild(posRow);
+
   const hint = document.createElement('div');
   hint.className = 'empty-hint';
   hint.innerHTML = 'Fill the [BRACKETS], attach the base character image, and generate. ' +
