@@ -224,6 +224,8 @@ async function loadLayers() {
   const data = await r.json();
   layers = data.layers;
   validCombos = data.validCombos;
+  const bust = Date.now();
+  layers.forEach((l) => l.traits.forEach((t) => { t.url += '?t=' + bust; })); // rescan shows fresh art
   sel = layers.map(() => 0);
   alignGroups(null);
   renderLayers();

@@ -32,30 +32,54 @@ async function removeWhite(src, dest) {
     if (y < H - 1) stack.push(p + W);
   }
 
+  // erode the character edge inward — eats the white-blended anti-aliasing ring
+  const ERODE = 2;
+  for (let e = 0; e < ERODE; e++) {
+    const ring = [];
+    for (let p = 0; p < W * H; p++) {
+      if (mask[p]) continue;
+      const x = p % W, y = (p / W) | 0;
+      let touch = false;
+      for (let dy = -1; dy <= 1 && !touch; dy++) {
+        for (let dx = -1; dx <= 1 && !touch; dx++) {
+          const nx = x + dx, ny = y + dy;
+          if (nx < 0 || ny < 0 || nx >= W || ny >= H) { touch = true; break; }
+          if (mask[ny * W + nx]) touch = true;
+        }
+      }
+      if (touch) ring.push(p);
+    }
+    for (const p of ring) mask[p] = 1;
+  }
+
   let removed = 0;
   for (let p = 0; p < W * H; p++) {
     if (mask[p]) { data[p * 4 + 3] = 0; removed++; }
   }
 
-  // feather: soften bright neutral pixels that touch the removed region (kills the white fringe)
-  for (let p = 0; p < W * H; p++) {
-    if (mask[p]) continue;
-    const x = p % W, y = (p / W) | 0;
-    const touching =
-      (x > 0 && mask[p - 1]) || (x < W - 1 && mask[p + 1]) ||
-      (y > 0 && mask[p - W]) || (y < H - 1 && mask[p + W]);
-    if (!touching) continue;
-    const i = p * 4;
-    const mn = Math.min(data[i], data[i + 1], data[i + 2]);
-    const mx = Math.max(data[i], data[i + 1], data[i + 2]);
-    if (mn >= 180 && mx - mn <= 24) {
-      data[i + 3] = Math.max(0, Math.min(255, (235 - mn) * 4 + 60));
+  // soften the cut: 3x3 box blur on the alpha channel (two passes) for a smooth edge
+  for (let pass = 0; pass < 2; pass++) {
+    const src = new Uint8Array(W * H);
+    for (let p = 0; p < W * H; p++) src[p] = data[p * 4 + 3];
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let sum = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
+            sum += src[ny * W + nx];
+            n++;
+          }
+        }
+        data[(y * W + x) * 4 + 3] = Math.round(sum / n);
+      }
     }
   }
 
   await sharp(data, { raw: { width: W, height: H, channels: 4 } }).png().toFile(dest);
   const pct = ((removed / (W * H)) * 100).toFixed(1);
-  console.log('wrote ' + dest + ' (' + pct + '% background removed)');
+  console.log('wrote ' + dest + ' (' + pct + '% background removed, edge eroded ' + ERODE + 'px + feathered)');
 }
 
 const [src, dest] = process.argv.slice(2);
