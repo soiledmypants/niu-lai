@@ -460,7 +460,9 @@ function renderPreview() {
     if (!t) return;
     if (adj && adj.li === li) return; // adjusted layer drawn as live parts below
     const img = document.createElement('img');
-    img.src = t.url;
+    const key = layers[li].dir + '/' + t.rel;
+    const ov = skinOverrideParts(key);
+    img.src = ov ? variantUrl(key, currentBodySkin()) : t.url;
     if (li === 0) {
       img.onload = () => {
         if (img.naturalWidth && img.naturalHeight) {
@@ -482,11 +484,31 @@ function placementKey(li) {
   return t ? layers[li].dir + '/' + t.rel : null;
 }
 
+function currentBodySkin() {
+  const li = layers.findIndex((l) => l.dir === '02-body');
+  if (li < 0) return null;
+  const t = layers[li].traits[sel[li]];
+  return t ? t.name : null;
+}
+
+function variantUrl(key, skin) {
+  const parts = key.replace(/\.png$/i, '').split('/');
+  parts[parts.length - 1] += '@' + skin + '.png';
+  return '/variants/' + parts.map(encodeURIComponent).join('/') + '?t=' + Date.now();
+}
+
+function skinOverrideParts(key) {
+  const skin = currentBodySkin();
+  const p = placements[key];
+  return skin && p && p.overrides && p.overrides[skin] ? p.overrides[skin] : null;
+}
+
 function enterAdjust(li) {
   const key = placementKey(li);
   const p = placements[key];
   if (!p) return;
-  adj = { key, src: p.src, parts: JSON.parse(JSON.stringify(p.parts)), active: 0, li };
+  const startParts = skinOverrideParts(key) || p.parts;
+  adj = { key, src: p.src, parts: JSON.parse(JSON.stringify(startParts)), active: 0, li, skin: currentBodySkin() };
   renderAll();
 }
 
@@ -631,25 +653,53 @@ function renderAdjBar() {
   bar.append(x.row, y.row, size.row);
   adjSliders = { x, y, size };
 
-  const actions = document.createElement('div');
-  actions.className = 'adj-actions';
-  const save = document.createElement('button');
-  save.className = 'save';
-  save.textContent = 'SAVE POSITION';
-  save.onclick = async () => {
-    save.textContent = 'SAVING…';
+  async function post(body, btn) {
+    btn.textContent = 'SAVING…';
     const r = await fetch('/api/place', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ key: adj.key, src: adj.src, parts: adj.parts }),
+      body: JSON.stringify(body),
     });
-    if (r.ok) { placements[adj.key] = { src: adj.src, parts: adj.parts }; adj = null; await loadLayers(); }
-    else { save.textContent = 'ERROR'; }
-  };
+    if (r.ok) { adj = null; await loadLayers(); }
+    else { btn.textContent = 'ERROR'; }
+  }
+
+  const species = t.group || '';
+  const hasOverride = !!skinOverrideParts(adj.key);
+  const info = document.createElement('div');
+  info.className = 'adj-help';
+  info.textContent = 'body: ' + (adj.skin || '?') +
+    (hasOverride ? ' — this skin has its OWN saved position' : ' — using the default ' + species + ' position');
+  bar.appendChild(info);
+
+  const actions = document.createElement('div');
+  actions.className = 'adj-actions';
+
+  const saveSkin = document.createElement('button');
+  saveSkin.className = 'save';
+  saveSkin.textContent = 'SAVE: THIS SKIN';
+  saveSkin.title = 'only ' + species + ' / ' + (adj.skin || '');
+  saveSkin.onclick = () => post({ key: adj.key, src: adj.src, parts: adj.parts, skin: adj.skin }, saveSkin);
+
+  const saveAll = document.createElement('button');
+  saveAll.className = 'save';
+  saveAll.textContent = 'SAVE: ALL ' + species.toUpperCase() + 'S';
+  saveAll.title = 'default position for every ' + species + ' skin (skin overrides stay)';
+  saveAll.onclick = () => post({ key: adj.key, src: adj.src, parts: adj.parts }, saveAll);
+
   const cancel = document.createElement('button');
   cancel.textContent = 'CANCEL';
   cancel.onclick = exitAdjust;
-  actions.append(save, cancel);
+
+  actions.append(saveSkin, saveAll, cancel);
+
+  if (hasOverride) {
+    const reset = document.createElement('button');
+    reset.textContent = 'RESET SKIN';
+    reset.title = 'remove this skin\'s override — falls back to the default position';
+    reset.onclick = () => post({ key: adj.key, skin: adj.skin, remove: true }, reset);
+    actions.append(reset);
+  }
   bar.appendChild(actions);
 }
 

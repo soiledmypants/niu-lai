@@ -10,6 +10,7 @@ const ROOT = __dirname;
 const LAYERS_DIR = path.join(ROOT, 'layers');
 const OUT_DIR = path.join(ROOT, 'output');
 const SOURCES_DIR = path.join(ROOT, 'sources');
+const VARIANTS_DIR = path.join(ROOT, 'variants');
 const PLACEMENTS_PATH = path.join(ROOT, 'placements.json');
 
 const IMG_RE = /\.(png|webp|gif|jpg|jpeg)$/i;
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use(express.static(path.join(ROOT, 'public')));
 app.use('/layers', express.static(LAYERS_DIR));
 app.use('/sources', express.static(SOURCES_DIR));
+app.use('/variants', express.static(VARIANTS_DIR));
 
 // ---- movable accessory placements ----------------------------------------
 
@@ -28,22 +30,55 @@ function readPlacements() {
 
 app.get('/api/placements', (_req, res) => res.json(readPlacements()));
 
+// per-skin variant file for a trait, e.g. variants/04-hat/bull/black cap@navy skin.png
+function variantPath(key, skin) {
+  return path.join(VARIANTS_DIR, key.replace(/\.png$/i, '') + '@' + skin + '.png');
+}
+
+const SKIN_RE = /^[\w][\w \-]*$/;
+
 app.post('/api/place', async (req, res) => {
-  const { key, src, parts } = req.body || {};
-  if (!key || !src || !Array.isArray(parts) || !parts.length) {
-    return res.status(400).json({ error: 'key, src and parts are required' });
-  }
+  const { key, src, parts, skin, remove } = req.body || {};
+  if (!key) return res.status(400).json({ error: 'key is required' });
   const dest = path.join(LAYERS_DIR, key);
-  const srcPath = path.join(ROOT, src);
-  if (!dest.startsWith(LAYERS_DIR) || !srcPath.startsWith(SOURCES_DIR)) {
-    return res.status(400).json({ error: 'bad path' });
+  if (!dest.startsWith(LAYERS_DIR)) return res.status(400).json({ error: 'bad path' });
+  if (skin && !SKIN_RE.test(skin)) return res.status(400).json({ error: 'bad skin name' });
+
+  const all = readPlacements();
+
+  // remove a skin override → that skin falls back to the default position
+  if (skin && remove) {
+    if (all[key] && all[key].overrides) {
+      delete all[key].overrides[skin];
+      if (!Object.keys(all[key].overrides).length) delete all[key].overrides;
+    }
+    try { fs.rmSync(variantPath(key, skin), { force: true }); } catch {}
+    fs.writeFileSync(PLACEMENTS_PATH, JSON.stringify(all, null, 2));
+    return res.json({ ok: true });
   }
+
+  if (!src || !Array.isArray(parts) || !parts.length) {
+    return res.status(400).json({ error: 'src and parts are required' });
+  }
+  const srcPath = path.join(ROOT, src);
+  if (!srcPath.startsWith(SOURCES_DIR)) return res.status(400).json({ error: 'bad source path' });
   if (!fs.existsSync(srcPath)) return res.status(400).json({ error: 'source not found: ' + src });
+
   try {
-    fs.mkdirSync(path.dirname(dest), { recursive: true });
-    await renderPlacement(srcPath, parts, dest);
-    const all = readPlacements();
-    all[key] = { src, parts };
+    if (skin) {
+      // position for ONE body skin only
+      const vp = variantPath(key, skin);
+      fs.mkdirSync(path.dirname(vp), { recursive: true });
+      await renderPlacement(srcPath, parts, vp);
+      all[key] = all[key] || { src, parts };
+      all[key].overrides = all[key].overrides || {};
+      all[key].overrides[skin] = parts;
+    } else {
+      // default position for every skin of this species (keeps existing skin overrides)
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      await renderPlacement(srcPath, parts, dest);
+      all[key] = { src, parts, ...(all[key] && all[key].overrides ? { overrides: all[key].overrides } : {}) };
+    }
     fs.writeFileSync(PLACEMENTS_PATH, JSON.stringify(all, null, 2));
     res.json({ ok: true });
   } catch (e) {
@@ -246,26 +281,36 @@ async function runJob(layers, combos, opts) {
 
     // cache each trait resized to the output size (traits are reused across many tokens)
     const cache = new Map();
-    async function traitBuf(li, ti) {
+    const placementsAll = readPlacements();
+    const bodyLi = layers.findIndex((l) => l.dir === '02-body');
+    async function traitBuf(li, ti, bodySkin) {
       const t = layers[li].traits[ti];
       const key = layers[li].dir + '/' + t.rel;
-      if (!cache.has(key)) {
+      // per-skin position override? use the variant rendered for that body skin
+      let file = path.join(LAYERS_DIR, layers[li].dir, t.rel);
+      const pl = placementsAll[key];
+      if (bodySkin && pl && pl.overrides && pl.overrides[bodySkin]) {
+        const vp = variantPath(key, bodySkin);
+        if (fs.existsSync(vp)) file = vp;
+      }
+      if (!cache.has(file)) {
         cache.set(
-          key,
-          await sharp(path.join(LAYERS_DIR, layers[li].dir, t.rel))
+          file,
+          await sharp(file)
             .resize(opts.width, opts.height, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
             .png()
             .toBuffer()
         );
       }
-      return cache.get(key);
+      return cache.get(file);
     }
 
     const all = [];
     for (let i = 0; i < combos.length; i++) {
       const id = i + 1;
+      const bodySkin = bodyLi >= 0 ? layers[bodyLi].traits[combos[i][bodyLi]].name : null;
       const inputs = [];
-      for (let li = 0; li < layers.length; li++) inputs.push({ input: await traitBuf(li, combos[i][li]) });
+      for (let li = 0; li < layers.length; li++) inputs.push({ input: await traitBuf(li, combos[i][li], bodySkin) });
 
       await sharp({
         create: { width: opts.width, height: opts.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } },

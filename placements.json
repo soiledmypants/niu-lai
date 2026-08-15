@@ -2,31 +2,73 @@
   "03-earring/bull/bnb.png": {
     "src": "sources/bnb earring.png",
     "parts": [
-      { "left": 878, "top": 420, "width": 95 },
-      { "left": 279, "top": 420, "width": 95, "fliph": true }
+      {
+        "left": 909,
+        "top": 414,
+        "width": 43
+      },
+      {
+        "left": 312,
+        "top": 417,
+        "width": 43,
+        "fliph": true
+      }
     ]
   },
   "03-earring/cow/bnb.png": {
     "src": "sources/bnb earring.png",
     "parts": [
-      { "left": 992, "top": 452, "width": 95 },
-      { "left": 167, "top": 452, "width": 95, "fliph": true }
+      {
+        "left": 973,
+        "top": 434,
+        "width": 43
+      },
+      {
+        "left": 232,
+        "top": 439,
+        "width": 47,
+        "fliph": true
+      }
     ]
   },
   "04-hat/bull/black cap.png": {
     "src": "sources/black cap.png",
-    "parts": [{ "left": 360, "top": -35, "width": 530 }]
+    "parts": [
+      {
+        "left": 367,
+        "top": -36,
+        "width": 518
+      }
+    ]
   },
   "04-hat/cow/black cap.png": {
     "src": "sources/black cap.png",
-    "parts": [{ "left": 345, "top": -30, "width": 560 }]
+    "parts": [
+      {
+        "left": 345,
+        "top": -30,
+        "width": 560
+      }
+    ]
   },
   "05-cig/bull/cig.png": {
     "src": "sources/cig.png",
-    "parts": [{ "left": 620, "top": 645, "width": 300 }]
+    "parts": [
+      {
+        "left": 706,
+        "top": 667,
+        "width": 228
+      }
+    ]
   },
   "05-cig/cow/cig.png": {
     "src": "sources/cig.png",
-    "parts": [{ "left": 745, "top": 800, "width": 300 }]
+    "parts": [
+      {
+        "left": 702,
+        "top": 897,
+        "width": 228
+      }
+    ]
   }
 }
