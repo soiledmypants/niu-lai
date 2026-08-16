@@ -32,7 +32,7 @@ Then:
 Options: `--count 100` (test batch), `--name`, `--desc`, `--base ipfs://CID` (if you already
 know the CID up front), `--width/--height` (default = native 1254).
 
-Metadata shape per token:
+Metadata shape per token (flap.sh-style attributes):
 
 ```json
 {
@@ -40,15 +40,33 @@ Metadata shape per token:
   "image": "ipfs://<CID>/1.png",
   "edition": 1,
   "attributes": [
-    { "trait_type": "species", "value": "bull" },
-    { "trait_type": "background", "value": "beach" },
-    { "trait_type": "body", "value": "purple skin" },
-    { "trait_type": "earring", "value": "bnb" },
-    { "trait_type": "hat", "value": "black cap" },
-    { "trait_type": "cig", "value": "joint" }
+    { "trait_type": "Species", "value": "Bull" },
+    { "trait_type": "Background", "value": "Beach" },
+    { "trait_type": "Body", "value": "Purple Skin" },
+    { "trait_type": "Earring", "value": "BNB" },
+    { "trait_type": "Hat", "value": "Black Cap" },
+    { "trait_type": "Cig", "value": "Joint" }
   ]
 }
 ```
+
+## Launching on flap.sh (bBroker Vault)
+
+The vault's `artSource` supports **external JSON metadata in directory mode**: a URL ending
+in `/`, from which it fetches `<base>/1.json`, `<base>/2.json`, … — exactly how `output/metadata/`
+is named.
+
+1. `npm run generate`
+2. Host `output/images/` somewhere HTTPS-reachable (IPFS + a public gateway works:
+   `https://ipfs.io/ipfs/<imagesCID>/`)
+3. `npm run generate -- --rebase https://ipfs.io/ipfs/<imagesCID>` so every metadata `image`
+   points at a URL the vault's renderers can actually fetch (plain `ipfs://` URIs don't load
+   in most browsers)
+4. Host `output/metadata/` the same way → `https://ipfs.io/ipfs/<metadataCID>/`
+5. When creating the vault, set `artSource = https://ipfs.io/ipfs/<metadataCID>/`
+   (**must end with `/`** — that's what switches it to directory mode)
+6. `maxNFTSupply = 4444`; remember flap's limit `maxNFTSupply × tokenCostPerNFT ≤ 1,000,000,000`
+   → burn cost per NFT can be at most ~225,000 tokens at this supply
 
 ## The math
 

@@ -250,6 +250,14 @@ function pickCombos(layers, count) {
   return out;
 }
 
+// metadata casing per flap.sh convention: {"trait_type":"Hat","value":"Crown"}
+const ACRONYMS = new Set(['us', 'cz', 'mlg', 'bnb']);
+function titleCase(s) {
+  return String(s).split(' ')
+    .map((w) => (ACRONYMS.has(w.toLowerCase()) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))
+    .join(' ');
+}
+
 // ---- generation job -------------------------------------------------------
 
 let job = { running: false, done: 0, total: 0, error: null, outDir: OUT_DIR, ms: 0 };
@@ -347,8 +355,8 @@ async function runJob(layers, combos, opts) {
 
       const attributes = [];
       const species = layers.map((l, li) => l.traits[combos[i][li]].group).find(Boolean);
-      if (species) attributes.push({ trait_type: 'species', value: species });
-      layers.forEach((l, li) => attributes.push({ trait_type: l.label, value: l.traits[combos[i][li]].name }));
+      if (species) attributes.push({ trait_type: 'Species', value: titleCase(species) });
+      layers.forEach((l, li) => attributes.push({ trait_type: titleCase(l.label), value: titleCase(l.traits[combos[i][li]].name) }));
       const meta = {
         name: opts.name + ' #' + id,
         description: opts.description,
